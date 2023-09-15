@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -31,10 +31,7 @@ type USDBRL struct {
 }
 
 func main() {
-	println("Initializing server...")
-
-	ctx := context.Background()
-	fmt.Printf("ctx: %v\n", ctx)
+	log.Println("Initializing server...")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cotacao", CotacaoHandler)
@@ -43,8 +40,11 @@ func main() {
 }
 
 func CotacaoHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Calling economia.awesomeapi.com.br")
 	client := http.Client{}
-	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
 	if err != nil {
 		log.Fatal(err)
@@ -59,7 +59,6 @@ func CotacaoHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	w.Write([]byte(string(body)))
 
 	var ctc Cotacao
 	if err = json.Unmarshal(body, &ctc); err != nil {
@@ -72,13 +71,22 @@ func CotacaoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	err = insertCotacao(db, ctc)
+	ctxDB, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err = insertCotacao(db, ctc, ctxDB)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+	}
+
+	err = json.NewEncoder(w).Encode(ctc.USDBRL.Bid)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
 func Conectar() (*sql.DB, error) {
+	log.Println("Connecting to database...")
 	db, err := sql.Open("mysql", "root:root@tcp(localhost:3306)/goexpert")
 	if err != nil {
 		return nil, err
@@ -90,19 +98,21 @@ func Conectar() (*sql.DB, error) {
 	return db, nil
 }
 
-func insertCotacao(db *sql.DB, cotacao Cotacao) error {
-	stmt, err := db.Prepare(`INSERT INTO cotacao(code, codein, name, 
+func insertCotacao(db *sql.DB, cotacao Cotacao, ctx context.Context) error {
+	log.Println("Inserting in the table cotacao...")
+	stmt, err := db.PrepareContext(ctx, `INSERT INTO cotacao(code, codein, name, 
 		high, low, varBid, pctChange, Bid, Ask, timestamp, create_date) 
 		VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(cotacao.USDBRL.Code, cotacao.USDBRL.Codein, cotacao.USDBRL.Name, cotacao.USDBRL.High, cotacao.USDBRL.Low,
+	_, err = stmt.ExecContext(ctx, cotacao.USDBRL.Code, cotacao.USDBRL.Codein, cotacao.USDBRL.Name, cotacao.USDBRL.High, cotacao.USDBRL.Low,
 		cotacao.USDBRL.VarBid, cotacao.USDBRL.PctChange, cotacao.USDBRL.Bid, cotacao.USDBRL.Ask, cotacao.USDBRL.Timestamp,
 		cotacao.USDBRL.CreateDate)
 	if err != nil {
 		return err
 	}
 	return nil
+
 }
