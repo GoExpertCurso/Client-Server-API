@@ -42,7 +42,7 @@ func main() {
 func CotacaoHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Calling economia.awesomeapi.com.br")
 	client := http.Client{}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
