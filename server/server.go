@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -72,7 +71,23 @@ func CotacaoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer db.Close()
 
-	createTable(db)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS cotacao(
+		id integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+		code VARCHAR(1024),
+		codein VARCHAR(1024) not null,
+		name VARCHAR(1024) not null,
+		high VARCHAR(1024) not null,
+		low VARCHAR(1024) not null,
+		varBid VARCHAR(1024) not null,
+		pctChange VARCHAR(1024) not null,
+		bid VARCHAR(1024) not null,
+		ask VARCHAR(1024) not null,
+		timestamp VARCHAR(1024) not null,
+		create_date VARCHAR(1024) not null
+	  )`)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	ctxDB, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
@@ -118,27 +133,4 @@ func insertCotacao(db *sql.DB, cotacao Cotacao, ctx context.Context) error {
 	}
 	return nil
 
-}
-
-func createTable(db *sql.DB) {
-	_, err := os.Stat("goExpert.db")
-	if err != nil {
-		_, err = db.Exec(`CREATE TABLE cotacao(
-			id integer NOT NULL PRIMARY KEY AUTOINCREMENT,
-			code VARCHAR(1024),
-			codein VARCHAR(1024) not null,
-			name VARCHAR(1024) not null,
-			high VARCHAR(1024) not null,
-			low VARCHAR(1024) not null,
-			varBid VARCHAR(1024) not null,
-			pctChange VARCHAR(1024) not null,
-			bid VARCHAR(1024) not null,
-			ask VARCHAR(1024) not null,
-			timestamp VARCHAR(1024) not null,
-			create_date VARCHAR(1024) not null
-		  )`)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
 }
